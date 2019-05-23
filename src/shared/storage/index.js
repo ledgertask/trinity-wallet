@@ -462,16 +462,18 @@ class Wallet {
     /**
      * Updates currency related data (conversionRate, currency, availableCurrencies)
      *
-     * @method updateCurrencyData
-     * @param {object} payload
+     * @method updateAvailableCurrencies
+     * @param {array} payload
      */
-    static updateCurrencyData(payload) {
-        const { conversionRate, currency, availableCurrencies } = payload;
-
+    static updateAvailableCurrencies(payload) {
         realm.write(() => {
-            Wallet.latestSettings.currency = currency;
-            Wallet.latestSettings.conversionRate = conversionRate;
-            Wallet.latestSettings.availableCurrencies = availableCurrencies;
+            Wallet.latestSettings.availableCurrencies = payload;
+        });
+    }
+
+    static updateSelectedCurrency(payload) {
+        realm.write(() => {
+            Wallet.latestSettings.currency = payload;
         });
     }
 

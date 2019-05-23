@@ -1,6 +1,6 @@
 import get from 'lodash/get';
-import keys from 'lodash/keys';
 import map from 'lodash/map';
+import CoinGecko from 'coingecko-api';
 import { changeIotaNode } from '../libs/iota/index';
 import i18next from '../libs/i18next';
 import { generateAlert, generateNodeOutOfSyncErrorAlert, generateUnsupportedNodeErrorAlert } from '../actions/alerts';
@@ -104,7 +104,7 @@ export const acceptPrivacy = () => {
  *
  * @returns {{type: {string} }}
  */
-const currencyDataFetchRequest = () => ({
+const supportedCurrenciesFetchRequest = () => ({
     type: ActionTypes.CURRENCY_DATA_FETCH_REQUEST,
 });
 
@@ -116,7 +116,7 @@ const currencyDataFetchRequest = () => ({
  *
  * @returns {{type: {string}, payload: {object} }}
  */
-export const currencyDataFetchSuccess = (payload) => {
+export const supportedCurrenciesFetchSuccess = (payload) => {
     Wallet.updateCurrencyData(payload);
 
     return {
@@ -132,7 +132,7 @@ export const currencyDataFetchSuccess = (payload) => {
  *
  * @returns {{type: {string} }}
  */
-const currencyDataFetchError = () => ({
+const supportedCurrenciesFetchError = () => ({
     type: ActionTypes.CURRENCY_DATA_FETCH_ERROR,
 });
 
@@ -392,53 +392,25 @@ export const changeNode = (payload) => (dispatch, getState) => {
 /**
  * Fetch currency information (conversion rates) for wallet
  *
- * @method getCurrencyData
+ * @method getSupportedCurrencies
  *
  * @param {string} currency
  * @param {boolean} withAlerts
  *
  * @returns {function(*): Promise<any>}
  */
-export function getCurrencyData(currency, withAlerts = false) {
-    const url = 'https://trinity-exchange-rates.herokuapp.com/api/latest?base=USD';
+export function getSupportedCurrencies() {
     return (dispatch) => {
-        dispatch(currencyDataFetchRequest());
-
-        return fetch(url)
-            .then(
-                (response) => response.json(),
-                () => {
-                    dispatch(currencyDataFetchError());
-
-                    if (withAlerts) {
-                        dispatch(
-                            generateAlert(
-                                'error',
-                                i18next.t('settings:couldNotFetchRates'),
-                                i18next.t('settings:couldNotFetchRatesExplanation', { currency: currency }),
-                            ),
-                        );
-                    }
-                },
-            )
-            .then((json) => {
-                const conversionRate = get(json, `rates.${currency}`) || 1;
-                const availableCurrencies = keys(get(json, 'rates'));
-
-                const payload = { conversionRate, currency, availableCurrencies };
-
-                // Update redux
-                dispatch(currencyDataFetchSuccess(payload));
-
-                if (withAlerts) {
-                    dispatch(
-                        generateAlert(
-                            'success',
-                            i18next.t('settings:fetchedConversionRates'),
-                            i18next.t('settings:fetchedConversionRatesExplanation', { currency: currency }),
-                        ),
-                    );
-                }
+        dispatch(supportedCurrenciesFetchRequest());
+        const coingecko = new CoinGecko();
+        coingecko.simple
+            .supportedVsCurrencies()
+            .then((response) => {
+                dispatch(supportedCurrenciesFetchSuccess(response));
+            })
+            .catch((_error) => {
+                dispatch(supportedCurrenciesFetchError());
+                // TODO: Alert message
             });
     };
 }

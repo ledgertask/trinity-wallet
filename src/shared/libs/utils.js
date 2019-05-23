@@ -204,20 +204,18 @@ export function getUrlNumberFormat(timeframe) {
  *
  * @returns {array}
  */
-export function formatChartData(json, timeframe) {
-    const timeValue = getUrlNumberFormat(timeframe);
-    const response = get(json, 'Data');
+export function formatChartData(response) {
     const hasDataPoints = size(response);
     const failedData = [];
 
     if (response && isArray(response) && hasDataPoints) {
         const data = [];
-        for (let i = 0; i <= timeValue; i++) {
-            const y = get(response, `[${i}].close`);
+        for (let i = 0; i < response.length; i++) {
+            const y = response[i][1];
             data[i] = {
                 x: i,
                 y: parseFloat(y),
-                time: get(response, `[${i}].time`),
+                time: response[i][0],
             };
         }
 

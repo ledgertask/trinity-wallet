@@ -1,7 +1,10 @@
 import get from 'lodash/get';
 import each from 'lodash/each';
 import map from 'lodash/map';
+import CoinGecko from 'coingecko-api';
 import { formatChartData, getUrlTimeFormat, getUrlNumberFormat } from '../libs/utils';
+
+const coingecko = new CoinGecko();
 
 export const ActionTypes = {
     SET_TIMEFRAME: 'IOTA/MARKET_DATA/SET_TIMEFRAME',
@@ -34,17 +37,16 @@ export function setTimeframe(timeframe) {
  *
  * @returns {{type: {string}, usdPrice: {number}, mcap: {number}, volume: {number}, change24h: {string} }}
  */
-export function setMarketData(data) {
-    const usdPrice = get(data, 'RAW.IOT.USD.PRICE') || 0;
-    const volume24Hours = get(data, 'RAW.IOT.USD.TOTALVOLUME24HTO') || 0;
-    const changePct24Hours = get(data, 'RAW.IOT.USD.CHANGEPCT24HOUR') || 0;
-    const mcap = Math.round(usdPrice * 2779530283);
-    const volume = Math.round(volume24Hours);
+export function setMarketData(currency, data) {
+    const price = get(data, currency) || 0;
+    const mcap = Math.round(get(data, `${currency}_market_cap`, 0));
+    const volume = Math.round(get(data, `${currency}_24h_vol`, 0));
+    const changePct24Hours = get(data, `${currency}_24h_change`, 0);
     const change24h = parseFloat(Math.round(changePct24Hours * 100) / 100).toFixed(2);
 
     return {
         type: ActionTypes.SET_STATISTICS,
-        usdPrice,
+        price,
         mcap,
         volume,
         change24h,
@@ -74,19 +76,10 @@ export function setCurrency(currency) {
  *
  * @returns {{type: {string}, usd: {number}, eur: {number}, btc: {number}, eth: {number} }}
  */
-export function setPrice(data) {
-    const priceData = get(data, 'RAW.IOT');
-    const usdPrice = get(priceData, 'USD.PRICE') || 0;
-    const eurPrice = get(priceData, 'EUR.PRICE') || 0;
-    const btcPrice = get(priceData, 'BTC.PRICE') || 0;
-    const ethPrice = get(priceData, 'ETH.PRICE') || 0;
-
+export function setPrice(price) {
     return {
         type: ActionTypes.SET_PRICE,
-        usd: usdPrice,
-        eur: eurPrice,
-        btc: btcPrice,
-        eth: ethPrice,
+        price,
     };
 }
 
@@ -98,10 +91,16 @@ export function setPrice(data) {
  * @returns {function} dispatch
  */
 export function getPrice() {
-    return (dispatch) => {
-        fetch('https://min-api.cryptocompare.com/data/pricemultifull?fsyms=IOT&tsyms=USD,EUR,BTC,ETH')
-            .then((response) => response.json(), () => {})
-            .then((json) => dispatch(setPrice(json)));
+    return (dispatch, getState) => {
+        const currency = getState().settings.toLowerCase();
+        return coingecko.simple
+            .price({
+                ids: 'iota',
+                vs_currencies: currency,
+            })
+            .then((price) => {
+                return dispatch(setPrice(price));
+            });
     };
 }
 
@@ -113,57 +112,45 @@ export function getPrice() {
  * @returns {function} dispatch
  */
 export function getChartData() {
-    return (dispatch) => {
-        const arrayCurrenciesTimeFrames = [];
-        //If you want a new currency just add it in this array, the function will handle the rest.
-        const currencies = ['USD', 'EUR', 'BTC', 'ETH'];
+    return (dispatch, getState) => {
+        const currency = getState().settings.toLowerCase();
         const timeframes = ['24h', '7d', '1m', '1h'];
         const chartData = {};
 
-        each(currencies, (itemCurrency) => {
-            chartData[itemCurrency] = {};
-            each(timeframes, (timeFrameItem) => {
-                arrayCurrenciesTimeFrames.push({ currency: itemCurrency, timeFrame: timeFrameItem });
-            });
-        });
-
-        const urls = [];
-        const grabContent = (url) => fetch(url).then((response) => response.json());
-
-        each(arrayCurrenciesTimeFrames, (currencyTimeFrameArrayItem) => {
-            const url = `https://min-api.cryptocompare.com/data/histo${getUrlTimeFormat(
-                currencyTimeFrameArrayItem.timeFrame,
-            )}?fsym=IOT&tsym=${currencyTimeFrameArrayItem.currency}&limit=${getUrlNumberFormat(
-                currencyTimeFrameArrayItem.timeFrame,
-            )}`;
-
-            urls.push(url);
-        });
-
-        Promise.all(map(urls, grabContent))
-            .then((results) => {
-                const chartData = { USD: {}, EUR: {}, BTC: {}, ETH: {} };
-                let actualCurrency = '';
-                let currentTimeFrame = '';
-                let currentCurrency = '';
-
-                each(results, (resultItem, index) => {
-                    currentTimeFrame = arrayCurrenciesTimeFrames[index].timeFrame;
-                    currentCurrency = arrayCurrenciesTimeFrames[index].currency;
-
-                    const formattedData = formatChartData(resultItem, currentTimeFrame);
-
-                    if (actualCurrency !== currentCurrency) {
-                        actualCurrency = currentCurrency;
-                    }
-
-                    chartData[currentCurrency][currentTimeFrame] = formattedData;
+        timeframes.forEach((timeframe) => {
+            fetchChartData(currency, timeframe)
+                .then((data) => {
+                    chartData[timeframe] = formatChartData(data);
+                })
+                .catch((error) => {
+                    console.log(error);
                 });
-
-                dispatch(setChartData(chartData));
-            })
-            .catch((err) => console.log(err)); // eslint-disable-line no-console
+        });
     };
+}
+
+function fetchChartData(currency, timeframe) {
+    if (timeframe === '1h') {
+        return fetchChartData(currency, '24h').then((prices24h) => {
+            // TODO: Only take last hour of data
+            return prices24h;
+        });
+    }
+
+    const timeframeMap = {
+        '24h': 1,
+        '7d': 7,
+        '1m': 30,
+    };
+
+    return coingecko.coins
+        .fetchMarketChart('iota', {
+            days: get(timeframeMap, timeframe),
+            vs_currencies: currency,
+        })
+        .then((data) => {
+            return data.prices;
+        });
 }
 
 /**
@@ -189,10 +176,20 @@ export function setChartData(chartData) {
  * @returns {function} dispatch
  */
 export function getMarketData() {
-    return (dispatch) =>
-        fetch('https://min-api.cryptocompare.com/data/pricemultifull?fsyms=IOT&tsyms=USD')
-            .then((response) => response.json(), (error) => console.log('SOMETHING WENT WRONG: ', error)) // eslint-disable-line no-console
-            .then((json) => dispatch(setMarketData(json)));
+    return (dispatch, getState) => {
+        const currency = getState().settings.toLowerCase();
+        return coingecko.simple
+            .price({
+                ids: 'iota',
+                vs_currencies: currency,
+                include_market_cap: true,
+                include_24hr_vol: true,
+                include_24hr_change: true,
+            })
+            .then((data) => {
+                return dispatch(setMarketData(currency, data.iota));
+            });
+    };
 }
 
 export function changeCurrency(currency, timeframe) {

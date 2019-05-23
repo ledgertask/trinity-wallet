@@ -1407,6 +1407,11 @@ code-point-at@^1.0.0:
   resolved "https://registry.yarnpkg.com/code-point-at/-/code-point-at-1.1.0.tgz#0d070b4d043a5bea33a2f1a40e2edb3d9a4ccf77"
   integrity sha1-DQcLTQQ6W+ozovGkDi7bPZpMz3c=
 
+coingecko-api@^1.0.5:
+  version "1.0.5"
+  resolved "https://registry.yarnpkg.com/coingecko-api/-/coingecko-api-1.0.5.tgz#3b55b479b3adfc1b1e120abf643d8e87720dcaa0"
+  integrity sha512-1RXsgGu71HQg+ciVcyxDFwU9TU4vXRa391TWzHLGikRAomUJc7KWUDx/UukZ9PkoLAexGy11F5XXdAEUzmVgGw==
+
 color-convert@^1.9.0:
   version "1.9.3"
   resolved "https://registry.yarnpkg.com/color-convert/-/color-convert-1.9.3.tgz#bb71850690e1f136567de629d2d5471deda4c1e8"
